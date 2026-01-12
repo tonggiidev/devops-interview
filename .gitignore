@@ -1,0 +1,116 @@
+# =========================
+
+# 🍎 System & IDE (OS Files)
+
+# =========================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+desktop.ini
+
+# IDE Settings
+
+.vscode/
+.idea/
+_.swp
+_.swo
+
+# =========================
+
+# 🐹 Go (Application)
+
+# =========================
+
+# Binaries
+
+/app/app
+/app/main
+_.exe
+_.test
+
+# Modules
+
+vendor/
+
+# Go Workspace
+
+go.work
+
+# =========================
+
+# 🏗️ Terraform & Terragrunt
+
+# =========================
+
+# Local .terraform directories
+
+\*\*/.terraform/
+
+# .tfstate files
+
+_.tfstate
+_.tfstate.\*
+
+# Crash logs
+
+crash.log
+crash.\*.log
+
+# Exclude all .tfvars files
+
+_.tfvars
+_.tfvars.json
+
+# Ignore override files as they are usually local overrides
+
+override.tf
+override.tf.json
+_\_override.tf
+_\_override.tf.json
+
+# Terragrunt cache
+
+.terragrunt-cache/
+\*\*/.terragrunt-cache/
+
+# Lock file
+
+# .terraform.lock.hcl
+
+# =========================
+
+# ☸️ Kubernetes & Secrets
+
+# =========================
+
+# Local Kubeconfig
+
+\*.kubeconfig
+config
+kubeconfig
+
+# Secrets files
+
+secret.yaml
+secrets.yaml
+\*.secret.env
+.env
+
+# =========================
+
+# 🐳 Docker
+
+# =========================
+
+docker-compose.override.yml
+
+# =========================
+
+# 🪵 Logs
+
+# =========================
+
+_.log
+npm-debug.log_
