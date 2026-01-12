@@ -4,12 +4,13 @@ kind: Kustomization
 namespace: api
 
 resources:
-  - ../../base
+- ../../base
 
 images:
-  - name: pazzii/go-sample-app
-    newTag: "v1.0.0"
+- name: pazzii/go-sample-app
+  newName: pazzii/go-sample-app
+  newTag: sha-b97c6dd171d6177823e4c39d0fd0b770b8020b0c
 
 replicas:
-  - name: go-sample-app
-    count: 3
+- count: 3
+  name: go-sample-app
