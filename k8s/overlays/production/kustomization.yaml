@@ -9,7 +9,7 @@ resources:
 images:
 - name: pazzii/go-sample-app
   newName: pazzii/go-sample-app
-  newTag: sha-b97c6dd171d6177823e4c39d0fd0b770b8020b0c
+  newTag: sha-4beb9e9c42158876a2d4c52ede731364d8797e5f
 
 replicas:
 - count: 3
