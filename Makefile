@@ -1,27 +1,32 @@
 # ==============================================================================
 # 🛠️ Configuration & Variables
 # ==============================================================================
-# Versions
+# --- GCP Infrastructure ---
+TF_LOG_LEVEL  := $(if $(DEBUG),DEBUG,ERROR)
+PROJECT_ID  	?= <PROJECT_ID>
+BUCKET_NAME 	?= <BUCKET_NAME>
+REGION      	?= asia-southeast1
+CLUSTER_NAME 	?= prod-cluster
+ENV         	:= production
+
+# --- Platform Versions ---
 ARGOCD_CHART_VERSION   := 9.2.4
 ROLLOUTS_CHART_VERSION := 2.40.5
 
-# Paths & Directories
+# --- Paths ---
 NAMESPACE       := argocd
 HELM_VALUES     := platform/argocd/values.yaml
 ROLLOUTS_VALUES := platform/argo-rollouts/values.yaml
-ENV             := production
 
-# App Details
+# --- App Details ---
 APP_NAME   := go-sample-app
 IMAGE_REPO := pazzii/$(APP_NAME)
 TAG        := latest
 
-# Default Goal
-.DEFAULT_GOAL := help
-
 # ==============================================================================
 # 📝 Help
 # ==============================================================================
+.DEFAULT_GOAL := help
 .PHONY: help
 help: ## 💬 Show this help message
 	@echo "Usage: make [target]"
@@ -31,30 +36,53 @@ help: ## 💬 Show this help message
 	@echo ""
 
 # ==============================================================================
-# 🏗️ Infrastructure (Terragrunt)
+# Setup & Prerequisites
+# ==============================================================================
+.PHONY: setup-gcp infra-setup-bucket connect-cluster
+
+setup-gcp: ## 🔐 Login to GCP & Setup Project
+	@echo "🔐 Logging in to Google Cloud..."
+	gcloud auth application-default login
+	gcloud config set project $(PROJECT_ID)
+	@echo "✅ GCP Setup Complete!"
+
+infra-setup-bucket: ## 🪣 Create Terraform State Bucket (Manual Step)
+	@echo "🪣 Creating Terraform State Bucket: gs://$(BUCKET_NAME)..."
+	@gcloud storage buckets create gs://$(BUCKET_NAME) --project=$(PROJECT_ID) --location=$(REGION) \
+	|| echo "⚠️ Bucket might already exist. Skipping..."
+
+connect-cluster: ## 🔌 Get Kubeconfig for GKE Cluster
+	@echo "🔌 Connecting to GKE Cluster..."
+	gcloud container clusters get-credentials $(CLUSTER_NAME) --region $(REGION) --project $(PROJECT_ID)
+	@echo "✅ Connected to $(CLUSTER_NAME)!"
+
+# ==============================================================================
+# Infrastructure (Terragrunt)
 # ==============================================================================
 .PHONY: infra-init infra-plan infra-apply infra-destroy
 
 infra-init: ## 🧱 Initialize Terragrunt
-	cd infrastructure/environments/$(ENV) && terragrunt run-all init
+	cd infrastructure/environments/$(ENV) && terragrunt init
 
 infra-plan: ## 📋 Plan Infrastructure changes
-	cd infrastructure/environments/$(ENV) && terragrunt run-all plan
+	cd infrastructure/environments/$(ENV) && terragrunt plan
+
+
 
 infra-apply: ## 🚀 Apply Infrastructure changes (Create VPC & GKE)
-	cd infrastructure/environments/$(ENV) && terragrunt run-all apply
+	cd infrastructure/environments/$(ENV) && TF_LOG=$(TF_LOG_LEVEL) terragrunt apply
 
 infra-destroy: ## 🧨 Destroy Infrastructure (Danger!)
-	cd infrastructure/environments/$(ENV) && terragrunt run-all destroy
+	cd infrastructure/environments/$(ENV) && terragrunt destroy
 
 # ==============================================================================
-# ⚙️ Platform (Helm & Add-ons)
+# Platform (Helm & Add-ons)
 # ==============================================================================
 .PHONY: install-argocd uninstall-argocd get-argocd-pass argocd-ui
 .PHONY: install-rollouts uninstall-rollouts rollouts-ui bootstrap-platform
 
 install-argocd: ## 💿 Install ArgoCD via Helm
-	@echo "🟢 Installing ArgoCD (Version: $(ARGOCD_CHART_VERSION))..."
+	@echo "🟢 Installing ArgoCD..."
 	helm repo add argo https://argoproj.github.io/argo-helm
 	helm repo update
 	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
@@ -65,25 +93,17 @@ install-argocd: ## 💿 Install ArgoCD via Helm
 		--wait
 	@echo "✅ ArgoCD Installed!"
 
-uninstall-argocd: ## 🗑️ Uninstall ArgoCD
-	@echo "🔴 Uninstalling ArgoCD..."
-	helm uninstall argocd -n $(NAMESPACE)
-	kubectl delete namespace $(NAMESPACE)
-	@echo "✅ ArgoCD Uninstalled!"
-
 get-argocd-pass: ## 🔑 Get ArgoCD Admin Password
 	@echo "🔐 ArgoCD Admin Password:"
 	@kubectl -n $(NAMESPACE) get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 	@echo ""
 
 argocd-ui: ## 🌐 Port-forward ArgoCD UI (localhost:8080)
-	@echo "🚀 Opening ArgoCD UI at http://localhost:8080"
-	@echo "   User: admin"
-	@echo "   Pass: (Run 'make get-argocd-pass')"
+	@echo "🚀 Opening ArgoCD UI at http://localhost:8080 (User: admin)"
 	@kubectl port-forward svc/argocd-server -n $(NAMESPACE) 8080:443
 
 install-rollouts: ## 🐣 Install Argo Rollouts via Helm
-	@echo "🟢 Installing Argo Rollouts (Version: $(ROLLOUTS_CHART_VERSION))..."
+	@echo "🟢 Installing Argo Rollouts..."
 	helm repo add argo https://argoproj.github.io/argo-helm
 	helm repo update
 	kubectl create namespace argo-rollouts --dry-run=client -o yaml | kubectl apply -f -
@@ -94,35 +114,22 @@ install-rollouts: ## 🐣 Install Argo Rollouts via Helm
 		--wait
 	@echo "✅ Argo Rollouts Installed!"
 
-uninstall-rollouts: ## 🗑️ Uninstall Argo Rollouts
-	@echo "🔴 Uninstalling Argo Rollouts..."
-	helm uninstall argo-rollouts -n argo-rollouts
-	kubectl delete namespace argo-rollouts
-	@echo "✅ Argo Rollouts Uninstalled!"
-
-rollouts-ui: ## 📊 Port-forward Argo Rollouts Dashboard
+rollouts-ui: ## 📊 Port-forward Argo Rollouts Dashboard (localhost:3100)
 	@echo "🚀 Opening Rollouts Dashboard at http://localhost:3100"
-	@echo "   (No password required - uses your Kubeconfig)"
 	@kubectl port-forward svc/argo-rollouts-dashboard -n argo-rollouts 3100:3100
 
-bootstrap-platform: install-argocd install-rollouts ## 📦 Install all platform components
+bootstrap-platform: install-argocd install-rollouts ## 📦 Install ALL platform components
 
 # ==============================================================================
-# 🐳 Application Development
+# Application Development (Go/Docker)
 # ==============================================================================
 .PHONY: run fmt vet test docker-build docker-push clean
 
 run: ## 🏃 Run Go app locally
 	cd app && go run main.go
 
-fmt: ## 🧹 Run go fmt
-	cd app && go fmt ./...
-
-vet: ## 🔍 Run go vet
-	cd app && go vet ./...
-
-test: fmt vet ## 🧪 Run Unit Tests (with fmt & vet)
-	cd app && go test -v ./...
+test: ## 🧪 Run Unit Tests
+	cd app && go fmt ./... && go vet ./... && go test -v ./...
 
 docker-build: ## 🔨 Build Docker Image
 	cd app && docker build -t $(IMAGE_REPO):$(TAG) .
@@ -130,14 +137,19 @@ docker-build: ## 🔨 Build Docker Image
 docker-push: ## 📤 Push Docker Image to Registry
 	docker push $(IMAGE_REPO):$(TAG)
 
-clean: ## 🗑️ Clean build artifacts
-	rm -f app/app
-
 # ==============================================================================
-# 🚀 Deployment (GitOps)
+# Deployment (GitOps)
 # ==============================================================================
-.PHONY: deploy-app get-argocd-pass argocd-ui
+.PHONY: deploy-app
 
-deploy-app: ## 🚢 Deploy Application via ArgoCD
+deploy-app: ## 🚢 Submit Application to ArgoCD
 	kubectl apply -f argocd/production.yaml
 	@echo "✅ Application manifest submitted to ArgoCD!"
+
+# ==============================================================================
+# 🚀 Full Stack Shortcuts
+# ==============================================================================
+.PHONY: all-infra all-platform
+
+all-infra: setup-gcp infra-setup-bucket infra-init infra-apply connect-cluster ## 🏗️ Build entire Infrastructure from scratch
+all-platform: bootstrap-platform ## 📦 Install all Platform tools
